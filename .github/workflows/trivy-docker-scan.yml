@@ -11,14 +11,14 @@ jobs:
 
       - name: build docker image
         run: |
-          docker build -t my-image: {{github.sha}} .
+          docker build -t my-image: {{github.sha}} ./Day-02-docker-image-scan
 
       - name: trivy seteup
         uses: aquasecurity/trivy-action@v0.2.3
 
       - name: scan docker image
         run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL my-image: {{github.sha}} 
+          trivy image --exit-code 1 --severity HIGH,CRITICAL my-image:{{github.sha}} 
 
       - name: upload trivy scan result
         uses: actions/upload-artifact@v4
