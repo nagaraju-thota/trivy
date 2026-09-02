@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t trivy-local:${{ github.sha }} .Day-02-docker-image-scan
+        run: docker build -t trivy-local:${{ github.sha }} ./Day-02-docker-image-scan
 
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@v0.35.0
@@ -30,6 +30,6 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
