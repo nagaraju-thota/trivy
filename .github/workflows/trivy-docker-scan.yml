@@ -9,21 +9,36 @@ jobs:
       - name: checkout the code
         uses: actions/checkout@v4
 
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+            sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
+            sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Verify Trivy
+        run: trivy --version
+
       - name: build docker image
         run: |
-          docker build -t my-image:${{github.sha}} ./Day-02-docker-image-scan
+          docker build -t my-image:${{ github.sha }} ./Day-02-docker-image-scan
 
-      - name: trivy seteup
+      - name: trivy setup
         uses: aquasecurity/trivy-action@v0.2.3
 
       - name: scan docker image
         run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL my-image:${{github.sha}} 
+          trivy image --exit-code 1 --severity HIGH,CRITICAL my-image:${{ github.sha }}
 
       - name: upload trivy scan result
         uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-result
+          path: .
 
       - name: scan summary
         if: success()
