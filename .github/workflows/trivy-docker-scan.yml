@@ -1,10 +1,10 @@
-name: docker image scanning using the trivy
+name: docker image scanning using trivy
 on:
   workflow_dispatch:
 
 jobs:
   docker-image-scanning:
-    name: docker image scanning using the trivy
+    name: docker image scanning using trivy
     runs-on: ubuntu-latest
     steps:
       - name: checkout the code
@@ -28,24 +28,34 @@ jobs:
         run: |
           docker build -t my-image:${{ github.sha }} ./Day-02-docker-image-scan
 
-      - name: scan docker image (report only)
+      - name: scan docker image (report only, never fails the job)
         run: |
-          trivy image --format table --output trivy-report.txt --severity HIGH,CRITICAL --ignore-unfixed my-image:${{ github.sha }}
+          trivy image \
+            --format table \
+            --output trivy-report.txt \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            my-image:${{ github.sha }}
+        continue-on-error: true
 
-      - name: upload trivy scan result
+      - name: upload trivy scan report
         uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-report
           path: trivy-report.txt
 
-      - name: enforce gate (fail build on HIGH/CRITICAL)
+      - name: enforce vulnerability gate (fails build on HIGH/CRITICAL)
         run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed my-image:${{ github.sha }}
+          trivy image \
+            --exit-code 1 \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            my-image:${{ github.sha }}
 
       - name: scan summary
         if: success()
         run: |
-          echo "The scan completed successfully. No HIGH or CRITICAL fixable vulnerabilities found."
+          echo "Scan passed — no fixable HIGH or CRITICAL vulnerabilities found."
 
       - name: log in to GHCR
         if: success()
@@ -55,7 +65,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: upload the docker image to the github artifactory
+      - name: build and push image to GHCR
         if: success()
         uses: docker/build-push-action@v5
         with:
