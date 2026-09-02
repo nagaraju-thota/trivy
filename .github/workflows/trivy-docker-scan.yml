@@ -1,13 +1,35 @@
-# Stage 1 — install dependencies (npm's own tooling lives only here)
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install --omit=dev
-COPY . .
+name: Trivy Docker Scan
 
-# Stage 2 — minimal runtime image, npm is not carried over
-FROM node:20-alpine
-RUN apk update && apk upgrade --no-cache
-WORKDIR /app
-COPY --from=builder /app /app
-CMD ["node", "index.js"]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  docker-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t trivy-local:${{ github.sha }} .
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: trivy-local:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
