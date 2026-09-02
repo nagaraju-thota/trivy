@@ -1,6 +1,7 @@
 name: docker image scanning using the trivy
 on:
   workflow_dispatch:
+
 jobs:
   docker-image-scanning:
     name: docker image scanning using the trivy
@@ -27,18 +28,14 @@ jobs:
         run: |
           docker build -t my-image:${{ github.sha }} ./Day-02-docker-image-scan
 
-      - name: trivy setup
-        uses: aquasecurity/trivy-action@v.28.0
-
-      - name: scan docker image
-        run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL my-image:${{ github.sha }}
-
-      - name: upload trivy scan result
-        uses: actions/upload-artifact@v4
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
-          name: trivy-scan-result
-          path: .
+          image-ref: 'my-image:${{ github.sha }}'
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
 
       - name: scan summary
         if: success()
@@ -50,4 +47,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/my-image:{{github.sha}}
+          tags: ghcr.io/${{ github.repository_owner }}/my-image:${{ github.sha }}
