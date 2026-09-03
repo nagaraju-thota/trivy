@@ -1,5 +1,4 @@
-
-name: Trivy file Security Scan
+name: Trivy Security Scan
 
 on:
   push:
@@ -19,65 +18,52 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.2.3
-
-      # --------------------------------------------------
-      # 1. Filesystem Vulnerability Scanning
-      # --------------------------------------------------
+      # 1. Filesystem vulnerability scan
       - name: 1 - Filesystem Vulnerability Scan
-        run: |
-          echo "Starting filesystem vulnerability scan..."
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0
+          format: table
 
-          trivy fs \
-            --scanners vuln \
-            --severity HIGH,CRITICAL \
-            --ignore-unfixed \
-            --exit-code 0 \
-            .
-
-      # --------------------------------------------------
-      # 2. Dependency Vulnerability Scanning
-      # --------------------------------------------------
+      # 2. Dependency vulnerability scan
       - name: 2 - Dependency Vulnerability Scan
-        run: |
-          echo "Starting dependency vulnerability scan..."
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0
+          format: table
 
-          trivy fs \
-            --scanners vuln \
-            --severity HIGH,CRITICAL \
-            --ignore-unfixed \
-            --exit-code 0 \
-            .
-
-      # --------------------------------------------------
-      # 3. Misconfiguration Scanning
-      # --------------------------------------------------
+      # 3. Misconfiguration scan
       - name: 3 - Misconfiguration Scan
-        run: |
-          echo "Starting misconfiguration scan..."
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: 0
+          format: table
 
-          trivy config \
-            --severity HIGH,CRITICAL \
-            --exit-code 0 \
-            .
-
-      # --------------------------------------------------
-      # 4. Secret Scanning
-      # --------------------------------------------------
+      # 4. Secret scan
       - name: 4 - Secret Scan
-        run: |
-          echo "Starting secret scan..."
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          severity: HIGH,CRITICAL
+          exit-code: 0
+          format: table
 
-          trivy fs \
-            --scanners secret \
-            --severity HIGH,CRITICAL \
-            --exit-code 0 \
-            .
-
-      # --------------------------------------------------
-      # Final Security Gate
-      # --------------------------------------------------
+      # Final security gate
       - name: Final Security Gate
         run: |
           echo "Running final security validation..."
