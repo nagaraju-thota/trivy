@@ -1,35 +1,78 @@
-name: Trivy Docker Scan
+name: Docker Build & Trivy Scan
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: my-app
+
 jobs:
-  docker-scan:
+  build-and-scan:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
+      packages: write          # push to GHCR
+      security-events: write   # upload SARIF to Security tab
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install Trivy on runner
+        run: |
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+          trivy --version
+
       - name: Build Docker image
-        run: docker build -t trivy-local:${{ github.sha }} ./Day-02-docker-image-scan
+        run: docker build -t my-app:${{ github.sha }} ./Day-02-docker-image-scan
 
-      - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          image-ref: trivy-local:${{ github.sha }}
-          format: sarif
-          output: trivy-results.sarif
-          severity: CRITICAL,HIGH
+      - name: Run Trivy vulnerability scanner (gate)
+        run: |
+          trivy image --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed my-app:${{ github.sha }}
 
-      - name: Upload Trivy results to GitHub Security
+      - name: Generate Trivy report (JSON)
+        if: always()
+        run: |
+          trivy image --severity HIGH,CRITICAL --format json --output trivy-report.json my-app:${{ github.sha }}
+
+      - name: Generate Trivy SARIF (for Security tab)
+        if: always()
+        run: |
+          trivy image --severity HIGH,CRITICAL --format sarif --output trivy-results.sarif my-app:${{ github.sha }}
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
+
+      # ---- only runs if the Trivy gate step above passed ----
+
+      - name: Upload Trivy report to GitHub Artifactory
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report-${{ github.sha }}
+          path: trivy-report.json
+          retention-days: 30
+
+      - name: Log in to GitHub Container Registry
+        if: success()
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker image to GitHub Container Registry
+        if: success()
+        run: |
+          docker tag my-app:${{ github.sha }} ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
