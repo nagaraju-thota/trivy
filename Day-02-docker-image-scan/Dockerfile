@@ -1,13 +1,17 @@
-# Stage 1 — install dependencies
-FROM node:20-alpine AS builder
+# ---- Build stage ----
+FROM node:20-alpine AS build
 WORKDIR /app
-COPY package*.json ./
-RUN npm install --omit=dev
+RUN apk update && apk upgrade --no-cache
+COPY package*.json .
+RUN npm install
 COPY . .
 
-# Stage 2 — minimal runtime, no npm bundled in
-FROM node:20-alpine
-RUN apk update && apk upgrade --no-cache
+# ---- Runtime stage ----
+FROM node:20-alpine AS runtime
 WORKDIR /app
-COPY --from=builder /app /app
+RUN apk update && apk upgrade --no-cache
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package*.json ./
+COPY --from=build /app .
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 CMD ["node", "index.js"]
