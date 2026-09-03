@@ -10,4 +10,4 @@ FROM node:20-alpine
 RUN apk update && apk upgrade --no-cache
 WORKDIR /app
 COPY --from=builder /app /app
-CMD ["node", "index.js"]
+CMD ["node", "app.js"]
