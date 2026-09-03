@@ -1,0 +1,97 @@
+
+name: Trivy Security Scan
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy-scan:
+    name: Trivy Security Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.2.3
+
+      # --------------------------------------------------
+      # 1. Filesystem Vulnerability Scanning
+      # --------------------------------------------------
+      - name: 1 - Filesystem Vulnerability Scan
+        run: |
+          echo "Starting filesystem vulnerability scan..."
+
+          trivy fs \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            .
+
+      # --------------------------------------------------
+      # 2. Dependency Vulnerability Scanning
+      # --------------------------------------------------
+      - name: 2 - Dependency Vulnerability Scan
+        run: |
+          echo "Starting dependency vulnerability scan..."
+
+          trivy fs \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            .
+
+      # --------------------------------------------------
+      # 3. Misconfiguration Scanning
+      # --------------------------------------------------
+      - name: 3 - Misconfiguration Scan
+        run: |
+          echo "Starting misconfiguration scan..."
+
+          trivy config \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            .
+
+      # --------------------------------------------------
+      # 4. Secret Scanning
+      # --------------------------------------------------
+      - name: 4 - Secret Scan
+        run: |
+          echo "Starting secret scan..."
+
+          trivy fs \
+            --scanners secret \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            .
+
+      # --------------------------------------------------
+      # Final Security Gate
+      # --------------------------------------------------
+      - name: Final Security Gate
+        run: |
+          echo "Running final security validation..."
+
+          trivy fs \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            .
+
+          trivy config \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            .
+
+          echo "All security scans passed successfully."
