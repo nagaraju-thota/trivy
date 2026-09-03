@@ -1,7 +1,13 @@
 {
-  "name": "trivy-demo",
+  "name": "trivy-day3",
   "version": "1.0.0",
+  "description": "Trivy Day 3 practice",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "helmet": "^8.1.0"
   }
 }
