@@ -1,5 +1,5 @@
 
-name: Trivy Security Scan
+name: Trivy file Security Scan
 
 on:
   push:
