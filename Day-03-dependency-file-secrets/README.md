@@ -50,9 +50,6 @@ trivy fs --scanners vuln,misconfig,secret .
 The workflow automatically runs on:
 
 * Push to `main`
-* Push to `development`
-* Pull requests to `main`
-* Pull requests to `development`
 * Manual workflow execution
 
 ## 🔍 Scanners Used

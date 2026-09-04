@@ -3,10 +3,9 @@ const { exec } = require("child_process");
 
 const app = express();
 
-// Practice secret — dummy value only
-const API_KEY = "dummy-api-key-12345";
 
-// Vulnerable command execution
+
+// Vulnerable command execution — for security practice only
 app.get("/ping", (req, res) => {
   const host = req.query.host;
 
