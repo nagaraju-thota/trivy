@@ -1,18 +1,34 @@
-# Use a slim, pinned base image to reduce the attack surface Trivy scans
-FROM node:22-alpine
+# ---- Build stage ----
+# npm and its bundled internal packages (tar, brace-expansion, ip-address,
+# etc.) are only needed here, to install dependencies. They never make it
+# into the final image below, which removes them from what Trivy scans.
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Apply latest Alpine security patches (picks up fixed libcrypto3/libssl3, etc.)
 RUN apk update && apk upgrade --no-cache
 
-# Install dependencies first for better layer caching
 COPY package.json ./
-RUN npm install --omit=dev && npm install -g npm@latest
+RUN npm install --omit=dev
 
-# Copy the rest of the app
 COPY . .
+
+# ---- Runtime stage ----
+# Fresh, patched base image with no npm CLI at all - just Node.js and
+# the app's own files/dependencies (currently none beyond core Node).
+FROM node:22-alpine AS runtime
+
+WORKDIR /app
+
+RUN apk update && apk upgrade --no-cache \
+    && rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/index.js ./index.js
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+# Run node directly instead of "npm start" - npm is no longer in this image
+CMD ["node", "index.js"]
