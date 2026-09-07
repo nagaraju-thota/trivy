@@ -2,8 +2,10 @@ name: K8s Config Security Scan
 
 on:
   push:
-    branches: [main]
+    branches: 
+      - main
   workflow_dispatch:
+
 jobs:
   trivy-k8s-scan:
     name: Scan Kubernetes Manifests
@@ -21,17 +23,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y trivy
 
-      - name: Scan Kubernetes manifests
+      - name: Scan Kubernetes manifests (k8s/)
         run: |
-          trivy config ./k8s/ \
+          trivy config Day-04-trivy-k8s/k8s/ \
             --severity HIGH,CRITICAL \
             --exit-code 1 \
             --format table
 
+
       - name: Generate SARIF report for GitHub Security tab
         if: always()
         run: |
-          trivy config ./k8s/ \
+          trivy config Day-04-trivy-k8s/k8s/ \
             --format sarif \
             --output trivy-k8s-results.sarif
 
