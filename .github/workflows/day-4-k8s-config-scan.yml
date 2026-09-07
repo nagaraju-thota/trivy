@@ -1,0 +1,42 @@
+name: K8s Config Security Scan
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  trivy-k8s-scan:
+    name: Scan Kubernetes Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Scan Kubernetes manifests
+        run: |
+          trivy config ./k8s/ \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format table
+
+      - name: Generate SARIF report for GitHub Security tab
+        if: always()
+        run: |
+          trivy config ./k8s/ \
+            --format sarif \
+            --output trivy-k8s-results.sarif
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-k8s-results.sarif
