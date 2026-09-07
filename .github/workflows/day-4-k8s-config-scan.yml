@@ -1,9 +1,6 @@
 name: K8s Config Security Scan
 
 on:
-  push:
-    branches: 
-      - main
   workflow_dispatch:
 
 jobs:

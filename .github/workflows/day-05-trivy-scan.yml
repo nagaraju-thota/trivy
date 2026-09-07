@@ -1,0 +1,79 @@
+name: Trivy Security Scan
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: demo
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+
+    # Needed so this job is allowed to push to GHCR using GITHUB_TOKEN
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build Docker Image
+        run: |
+          docker build -t demo:${{ github.sha }} .
+
+      # --- Explicit Trivy installation ---
+      # Installs the Trivy CLI directly onto the runner using the official
+      # install script, instead of relying only on the trivy-action wrapper.
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
+            sh -s -- -b /usr/local/bin
+          trivy --version
+
+      - name: Trivy Image Scan
+        run: |
+          trivy image demo:${{ github.sha }} \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --format table
+
+      # The steps below only run if the Trivy scan above passes,
+      # since a failed step stops the job by default.
+
+      - name: Log in to GitHub Container Registry
+        if: success()
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag image for GHCR
+        if: success()
+        run: |
+          docker tag demo:${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker tag demo:${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Push Docker Image to GHCR
+        if: success()
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy
+        run: echo "Add your deployment step here"

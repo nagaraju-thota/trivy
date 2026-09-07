@@ -1,0 +1,11 @@
+{
+  "name": "trivy-day5-demo",
+  "version": "1.0.0",
+  "description": "Minimal app used to demonstrate Trivy + GitHub Actions CI/CD",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"No tests yet - placeholder for CI\" && exit 0"
+  },
+  "license": "MIT"
+}
