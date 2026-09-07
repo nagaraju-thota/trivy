@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  APP_DIR: day-05-trivy-scan   # folder containing package.json and Dockerfile
+  APP_DIR: Day-05-Trivy-scan   # folder containing package.json and Dockerfile
 
 jobs:
   trivy:
