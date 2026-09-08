@@ -7,7 +7,8 @@ on:
   pull_request:
 
 env:
-  APP_DIR: Day-05-Trivy-scan   # folder containing package.json and Dockerfile
+  APP_DIR: Day-05-Trivy-scan   # contains Dockerfile, package.json, index.js, k8s/
+  BUILD_ID: build-${{ github.run_number }}
 
 jobs:
   trivy:
@@ -30,38 +31,130 @@ jobs:
         run: |
           docker build -t demo:${{ github.sha }} .
 
-      # --- Explicit Trivy installation ---
       - name: Install Trivy
         run: |
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
             sh -s -- -b /usr/local/bin
           trivy --version
 
-      # continue-on-error lets the job keep running even if vulnerabilities
-      # are found, so the report always gets generated and uploaded below.
-      - name: Trivy Image Scan (generate report)
-        id: trivy_scan
+      # ---------------------------------------------------------------
+      # 1. IMAGE SCAN
+      # ---------------------------------------------------------------
+      - name: Trivy Image Scan
+        id: image_scan
         run: |
           trivy image demo:${{ github.sha }} \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
             --format table \
-            --output trivy-report.txt
+            --output trivy-image-report.txt
         continue-on-error: true
 
-      - name: Upload Trivy report to Nexus
+      # ---------------------------------------------------------------
+      # 2. FILESYSTEM SCAN - VULNERABILITIES
+      # ---------------------------------------------------------------
+      - name: Trivy Filesystem Scan - Vulnerabilities
+        id: fs_vuln_scan
+        working-directory: ${{ env.APP_DIR }}
         run: |
-          REPORT_NAME="trivy-report-${{ github.sha }}.txt"
-          curl -v -u "${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }}" \
-            --upload-file trivy-report.txt \
-            "${{ secrets.NEXUS_URL }}/repository/trivy-reports/${{ github.event.repository.name }}/${REPORT_NAME}"
-        # No `if:` condition — always runs, clean or vulnerable scan.
+          trivy fs . \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --format table \
+            --output ../trivy-fs-vulnerability-report.txt
+        continue-on-error: true
 
-      - name: Fail job if vulnerabilities found
-        if: steps.trivy_scan.outcome == 'failure'
+      # ---------------------------------------------------------------
+      # 3. FILESYSTEM SCAN - SECRETS
+      # ---------------------------------------------------------------
+      - name: Trivy Filesystem Scan - Secrets
+        id: fs_secret_scan
+        working-directory: ${{ env.APP_DIR }}
         run: |
-          echo "❌ Trivy found HIGH/CRITICAL vulnerabilities. See uploaded report in Nexus."
+          trivy fs . \
+            --scanners secret \
+            --exit-code 1 \
+            --format table \
+            --output ../trivy-fs-secret-report.txt
+        continue-on-error: true
+
+      # ---------------------------------------------------------------
+      # 4a. CONFIG SCAN - DOCKERFILE
+      # ---------------------------------------------------------------
+      - name: Trivy Config Scan - Dockerfile
+        id: config_scan_dockerfile
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          trivy config . \
+            --skip-dirs k8s \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format table \
+            --output ../trivy-config-dockerfile-report.txt
+        continue-on-error: true
+
+      # ---------------------------------------------------------------
+      # 4b. CONFIG SCAN - KUBERNETES MANIFESTS (dedicated)
+      # ---------------------------------------------------------------
+      - name: Trivy Config Scan - Kubernetes
+        id: config_scan_k8s
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          trivy config ./k8s/ \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format table \
+            --output ../trivy-config-k8s-report.txt
+        continue-on-error: true
+
+      # ---------------------------------------------------------------
+      # UPLOADS TO NEXUS (mirrors the exact tree you specified)
+      # ---------------------------------------------------------------
+      - name: Upload Image Scan report to Nexus
+        run: |
+          curl -v -u "${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }}" \
+            --upload-file trivy-image-report.txt \
+            "${{ secrets.NEXUS_URL }}/repository/trivy-reports/image-scan/${{ env.BUILD_ID }}/trivy-image-report.txt"
+
+      - name: Upload Filesystem Vulnerability report to Nexus
+        run: |
+          curl -v -u "${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }}" \
+            --upload-file trivy-fs-vulnerability-report.txt \
+            "${{ secrets.NEXUS_URL }}/repository/trivy-reports/filesystem-scan/vulnerabilities/${{ env.BUILD_ID }}/trivy-fs-vulnerability-report.txt"
+
+      - name: Upload Filesystem Secret report to Nexus
+        run: |
+          curl -v -u "${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }}" \
+            --upload-file trivy-fs-secret-report.txt \
+            "${{ secrets.NEXUS_URL }}/repository/trivy-reports/filesystem-scan/secrets/${{ env.BUILD_ID }}/trivy-fs-secret-report.txt"
+
+      - name: Upload Config Scan report to Nexus (Dockerfile)
+        run: |
+          curl -v -u "${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }}" \
+            --upload-file trivy-config-dockerfile-report.txt \
+            "${{ secrets.NEXUS_URL }}/repository/trivy-reports/config-scan/dockerfile/${{ env.BUILD_ID }}/trivy-config-dockerfile-report.txt"
+
+      - name: Upload Config Scan report to Nexus (Kubernetes)
+        run: |
+          curl -v -u "${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASS }}" \
+            --upload-file trivy-config-k8s-report.txt \
+            "${{ secrets.NEXUS_URL }}/repository/trivy-reports/config-scan/k8s/${{ env.BUILD_ID }}/trivy-config-k8s-report.txt"
+
+      # ---------------------------------------------------------------
+      # GATE: fail the job if ANY scan found issues (after all uploads)
+      # ---------------------------------------------------------------
+      - name: Fail job if any scan found issues
+        if: |
+          steps.image_scan.outcome == 'failure' ||
+          steps.fs_vuln_scan.outcome == 'failure' ||
+          steps.fs_secret_scan.outcome == 'failure' ||
+          steps.config_scan_dockerfile.outcome == 'failure' ||
+          steps.config_scan_k8s.outcome == 'failure'
+        run: |
+          echo "❌ One or more Trivy scans found issues. See uploaded reports in Nexus under ${{ env.BUILD_ID }}."
           exit 1
 
       - name: Deploy
